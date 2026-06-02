@@ -33,7 +33,8 @@ stages {
       cat $KUBECONFIG > .kube/config
       helm upgrade --install app ./charts \
         --kubeconfig .kube/config \
-        --namespace staging
+        --namespace staging \
+        --set nginx.service.nodePort=30081
       '''
       }
     }
@@ -55,7 +56,8 @@ stages {
           cat $KUBECONFIG > .kube/config
           helm upgrade --install app ./charts \
             --kubeconfig .kube/config \
-            --namespace prod
+            --namespace prod \
+            --set nginx.service.nodePort=30082
           '''
         }
       }
