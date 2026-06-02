@@ -1,0 +1,91 @@
+{{- if .Values.movieDb.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: movie-db-pvc
+  labels:
+    app: movie-db
+    {{- include "fastapiapp.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.movieDb.persistence.size }}
+  {{- if .Values.movieDb.persistence.storageClass }}
+  storageClassName: {{ .Values.movieDb.persistence.storageClass }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: movie-db-secret
+  labels:
+    app: movie-db
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.movieDb.auth.username | quote }}
+  POSTGRES_PASSWORD: {{ .Values.movieDb.auth.password | quote }}
+  POSTGRES_DB: {{ .Values.movieDb.auth.database | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: movie-db
+  labels:
+    app: movie-db
+    {{- include "fastapiapp.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: movie-db
+  template:
+    metadata:
+      labels:
+        app: movie-db
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.movieDb.image.repository }}:{{ .Values.movieDb.image.tag }}"
+          imagePullPolicy: {{ .Values.movieDb.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: movie-db-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            {{- toYaml .Values.movieDb.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.movieDb.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: movie-db-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: movie-db
+  labels:
+    app: movie-db
+    {{- include "fastapiapp.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: movie-db
+  ports:
+    - port: {{ .Values.movieDb.service.port }}
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
